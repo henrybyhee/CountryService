@@ -1,0 +1,24 @@
+version: "3"
+services:
+  db:
+    image: mysql:5.7
+    environment:
+      - MYSQL_ROOT_PASSWORD=Password123
+      - MYSQL_DATABASE=country
+  web:
+    image: country_service:latest
+    ports:
+      - 3000:3000
+    command: ./start.sh
+    environment:
+      - DB_NAME=country
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=Password123
+      - JWT_ISSUER=countryserver1
+      - JWT_SECRET_FOR_ACCESS_TOKEN=4C5V8WDfglSCUeOYvwZR1rhfmG1e8XSB
+      - JWT_SECRET_FOR_REFRESH_TOKEN=k7eQ715I2hD50VNLwsCtf8CkMIwcW2BP
+      - JWT_EXPIRY_ACCESS_TOKEN_IN_SEC=300
+      - JWT_EXPIRY_REFRESH_TOKEN_IN_SEC=1209600
+networks:
+  webnet:
