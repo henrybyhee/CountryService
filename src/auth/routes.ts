@@ -3,14 +3,10 @@ import { AuthController } from "./controller";
 import { check } from "express-validator";
 
 const router = Router();
-
-router.post("/refresh", AuthController.refresh);
-
 router.post("/login", [
   check("email").isEmail(),
   check("password").isLength({ min: 9 }),
 ], AuthController.login);
-
 router.post("/signup", [
   check("email").isEmail(),
   check("password").isLength({ min: 9 }),

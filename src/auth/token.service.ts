@@ -1,5 +1,5 @@
-import jwt from "jsonwebtoken";
-import { IPayload, ITokens } from "./token.interface";
+import jwt, { TokenExpiredError } from "jsonwebtoken";
+import { IPayload, IToken } from "./token.interface";
 import { ITokenService } from "./token.interface";
 import { getRepository, Repository } from "typeorm";
 import { UserToken, TokenUse } from "./entity";
@@ -14,39 +14,25 @@ import { EntityNotFoundError } from "typeorm/error/EntityNotFoundError";
 export class TokenService implements ITokenService {
   issuer: string;
   accessTokenSecret: string;
-  refreshTokenSecret: string;
   accessTokenExpiryInSec: number;
-  refreshTokenExpiryInSec: number;
   tokenRepo: Repository<UserToken>;
   constructor(
     issuer: string,
     accessTokenSecret: string,
-    refreshTokenSecret: string,
     accessTokenExpiryInSec: number,
-    refreshTokenExpiryInSec: number,
+    repository: Repository<UserToken>,
   ) {
     this.issuer = issuer;
     this.accessTokenSecret = accessTokenSecret;
-    this.refreshTokenSecret = refreshTokenSecret;
     this.accessTokenExpiryInSec = accessTokenExpiryInSec;
-    this.refreshTokenExpiryInSec = refreshTokenExpiryInSec;
-    this.tokenRepo = getRepository(UserToken);
-  }
-
-  public async generateTokens(userId: string): Promise<ITokens> {
-    const accessToken = await this.generateAccessToken(userId);
-    const refreshToken = await this.generateRefreshToken(userId);
-    return await {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    };
+    this.tokenRepo = repository;
   }
 
   /**
    * Generate Access Token and save it in database
    * @param userId Email
    */
-  public async generateAccessToken(userId: string): Promise<string> {
+  public async generateAccessToken(userId: string): Promise<IToken> {
     const time = new Date();
     const exp = Math.floor(time.getTime() / 1000) + this.accessTokenExpiryInSec;
     const newToken = await this.generateToken(
@@ -71,44 +57,6 @@ export class TokenService implements ITokenService {
         revoked: false,
       });
       console.log(`Added access token for userId ${userId}`);
-    } catch (err) {
-      console.log(
-        `Error Revoking past token and adding new token: ${err.message}`,
-      );
-    }
-    return await newToken;
-  }
-
-  /**
-   * Generate Refresh Token and save it in database
-   * @param userId Email
-   */
-  public async generateRefreshToken(userId: string): Promise<string> {
-    const time = new Date();
-    const exp = Math.floor(time.getTime() / 1000) +
-      this.refreshTokenExpiryInSec;
-    const newToken = await this.generateToken(
-      userId,
-      exp,
-      "refresh",
-      this.refreshTokenSecret,
-    );
-    try {
-      // Revoke all access tokens
-      const updated = await this.tokenRepo.update({
-        email: userId,
-        use: TokenUse.REFRESH,
-      }, { revoked: true });
-      console.log(`Revoked all ${updated.affected} tokens`);
-
-      // Insert new token
-      await this.tokenRepo.save({
-        email: userId,
-        use: TokenUse.REFRESH,
-        token: newToken,
-        revoked: false,
-      });
-      console.log(`Added refresh token for userId ${userId}`);
     } catch (err) {
       console.log(
         `Error Revoking past token and adding new token: ${err.message}`,
@@ -149,47 +97,17 @@ export class TokenService implements ITokenService {
       await this.tokenRepo.update({
         token: token,
       }, { revoked: true });
-      console.log(`Verify failed. Revoked token`);
+      if (err instanceof TokenExpiredError) {
+        throw err;
+      }
       throw new TokenVerifyError(err.message);
     }
     return await payload;
   }
 
-  /**
-   * Check if token has been revoked then verify. If verify success,
-   * return payload else revoked this token.
-   * @param token refresh token
-   * @throws {NotFoundError} Token not found
-   * @throws {TokenVerifyError} Token is revoked or verification failed.
-   * @throws {Error} Uncaught Error
-   */
-  public async verifyRefreshToken(token: string): Promise<IPayload> {
-    // Does token exist?
-    let tokenRow: UserToken;
-    try {
-      tokenRow = await this.tokenRepo.findOneOrFail({
-        token: token,
-      });
-    } catch (err) {
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundError("Token is not found");
-      }
-      throw err;
-    }
-    // Check if revoked
-    if (tokenRow.revoked) {
-      throw new TokenVerifyError("Token has been revoked");
-    }
-    let payload: IPayload;
-    try {
-      payload = jwt.verify(token, this.refreshTokenSecret) as IPayload;
-    } catch (err) {
-      await this.tokenRepo.update({
-        token: token,
-      }, { revoked: true });
-      throw new TokenVerifyError(err.message);
-    }
-    return await payload;
+  public async getUserIdFromAccessToken(token: string): Promise<string> {
+    const payload = jwt.decode(token) as IPayload;
+    return payload.user;
   }
 
   async generateToken(

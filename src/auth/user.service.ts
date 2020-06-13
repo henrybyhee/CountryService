@@ -3,17 +3,18 @@ import { User } from "./entity";
 import bcrypt from "bcrypt";
 import { NotFoundError, WrongInputError } from "../shared/errors";
 import { EntityNotFoundError } from "typeorm/error/EntityNotFoundError";
+import { IUser } from "./user.dto";
 
 export interface IUserService {
-  getUser(email: string): Promise<User>;
-  login(email: string, password: string): void;
-  signup(email: string, password: string): Promise<string>;
+  getUser(email: string): Promise<IUser>;
+  login(email: string, password: string): Promise<IUser>;
+  signup(email: string, password: string): Promise<IUser>;
 }
 
 export class UserService implements IUserService {
   userRepo: Repository<User>;
-  constructor() {
-    this.userRepo = getRepository(User);
+  constructor(repository: Repository<User>) {
+    this.userRepo = repository;
   }
 
   /**
@@ -22,7 +23,7 @@ export class UserService implements IUserService {
    * @throws {NotFoundError} user is not found
    * @throws {Error} Uncaught Error
    */
-  public async getUser(email: string): Promise<User> {
+  public async getUser(email: string): Promise<IUser> {
     let user;
     try {
       user = await this.userRepo.findOneOrFail({
@@ -34,7 +35,10 @@ export class UserService implements IUserService {
       }
       throw err;
     }
-    return user;
+    return {
+      email: user.email,
+      password: user.password,
+    };
   }
 
   /**
@@ -47,12 +51,16 @@ export class UserService implements IUserService {
    * @throws {NotFoundError} user is not found
    * @throws {Error} Uncaught Error
    */
-  public async login(email: string, password: string) {
+  public async login(email: string, password: string): Promise<IUser> {
     let user = await this.getUser(email);
     const res = await bcrypt.compare(password, user.password);
     if (!res) {
       throw new WrongInputError(`Wrong password for ${email}`);
     }
+    return {
+      email: user.email,
+      password: user.password,
+    };
   }
 
   /**
@@ -62,7 +70,7 @@ export class UserService implements IUserService {
    * @throws {WrongInputError} Email is in use
    * @throws {Error} Uncaught Error
    */
-  public async signup(email: string, password: string): Promise<string> {
+  public async signup(email: string, password: string): Promise<IUser> {
     const hashedPassword = await bcrypt.hash(password, 10);
     let user;
     try {
@@ -83,6 +91,9 @@ export class UserService implements IUserService {
       }
       throw err;
     }
-    return user.email;
+    return {
+      email: user.email,
+      password: user.password,
+    };
   }
 }

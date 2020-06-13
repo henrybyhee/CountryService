@@ -4,11 +4,11 @@ A simple country service written in Node.js with authentication module.
 
 # Features
 
-- User can log in or sign up and receive access token and refresh token if successful.
-- User can request for new access token with a valid refresh token. Access token is valid for 5 mins while refresh token is valid for 14 days.
-- Each user is only assigned a pair of access token and refresh tokens. Previous tokens will be revoked.
+- User can log in or sign up and receive access token if successful.
+- Each user is only assigned one valid access token at any given time. Previous tokens will be revoked.
 - User can fetch list of countries with pagination, limit and order.
 - User can fetch a country detail
+- User can get new access token from these APIs if it has expired.
 - User is denied access to server if access token is not provided or invalid.
 
 # Installation
@@ -27,6 +27,13 @@ A simple country service written in Node.js with authentication module.
    ```
 4. Server should be listening at `localhost:3000`
 
+5. Login with admin credentials:
+    ```json
+    {
+        "email": "admin@resync.io",
+        "password": "password12345"
+    }
+    ```
 
 # API
 
@@ -51,8 +58,7 @@ POST /oauth/signup/
 1. 201 Success
    ```json
     {
-        "accessToken": "",
-        "refreshToken": "",
+        "accessToken": ""
     }
    ```
 2. 422 Unprocessed Entity. Possible causes: used email, incorrect user input.
@@ -117,47 +123,6 @@ POST /oauth/signup/
    }
     ```
 
-### 3. REFRESH TOKEN
-
-POST /oauth/refresh/
-
-*Request Body*
-```json
-{
-    "refreshToken": "XXX"
-}
-```
-
-*Response*
-1. 201 Success
-    ```json
-    {
-        "accessToken": "",
-        "refreshToken": ""
-    }
-    ```
-    Side effects: 
-      - Previous access tokens that belong to the user will be revoked.
-2. 404 Not Found. Possible causes: Token not found, user not found.
-    ```json
-    {
-        "error": "Token is not found | User not found".
-    }
-    ```
-3. 403 Forbidden. Possible causes: refresh token revoked, verify failed, refresh token expired.
-    ```json
-    {
-        "error": ""
-    }
-    ```
-4. 500 Internal Server Error. Possible causes: Uncaught Errors.
-    ```json
-    {
-       "error": ""
-   }
-    ```
-
-
 ## Country
 
 ### 1. GET COUNTRY DETAIL
@@ -166,7 +131,9 @@ GET /api/countries/{name}
 
 Note:
   - Access Token to be added as bearer token.
-
+  - Expired Access Token will be accepted. In such case, new access token will be embedded in
+  `X-NEW-TOKEN` of response header. This is provided that user encoded in token exists
+  in database.
 
 *Response*
 1. 200 Success
@@ -180,6 +147,8 @@ Note:
         }
     }
     ```
+    Note:
+      - Collect new token from `X-NEW-TOKEN` in response header.
 2. 404 Not Found. Possible causes: Country not found.
     ```json
     {
@@ -205,6 +174,9 @@ GET /api/countries/
 
 Note:
   - Access Token to be added as bearer token.
+  - Expired Access Token will be accepted. In such case, new access token will be embedded in
+  `X-NEW-TOKEN` of response header. This is provided that user encoded in token exists
+  in database.
 
 *Request Parameters*
 1. sort: Field to sort by
@@ -245,4 +217,5 @@ Note:
 
 - Add integration test
 - Separate Authorization module into a microservice that handles token generation and oauth2.0 flow.
+- Use asymmetric keys to sign and verify JWT.
 - Add functions to filter countries based on attributes.

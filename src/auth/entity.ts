@@ -14,7 +14,6 @@ export class User {
 
 export enum TokenUse {
   ACCESS = "access",
-  REFRESH = "refresh",
 }
 
 // Ensure that user only has one valid pair at any given time

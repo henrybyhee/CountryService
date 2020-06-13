@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { CountryService } from "./service";
+import { createService } from "./service";
 import { ICountry } from "./dto";
 import { validationResult } from "express-validator";
 import { getErrorCode, buildErrorBody } from "../shared/errors";
@@ -12,7 +12,7 @@ export class CountryController {
     const { name } = req.params;
     let country: ICountry;
     try {
-      const service = new CountryService();
+      const service = createService();
       country = await service.get(name);
     } catch (err) {
       return res.status(getErrorCode(err)).json(buildErrorBody(err));
@@ -33,7 +33,7 @@ export class CountryController {
     const { limit, offset, sort } = req.query;
     let countryList;
     try {
-      const service = new CountryService();
+      const service = createService();
       countryList = await service.list(
         !sort ? "id" : String(sort),
         !limit ? 10 : Number(limit),

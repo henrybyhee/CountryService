@@ -5,17 +5,30 @@ import { buildOrderMap } from "../shared/repository";
 import { EntityNotFoundError } from "typeorm/error/EntityNotFoundError";
 import { NotFoundError } from "../shared/errors";
 
-export class CountryService {
+export interface ICountryService {
+  get(name: string): Promise<ICountry>;
+  list(sort: string, limit: number, offset: number): Promise<Array<ICountry>>;
+}
+
+/**
+ * Inject Dependencies
+ */
+export function createService(): ICountryService {
+  const countryRepository = getRepository(Country);
+  return new CountryService(countryRepository);
+}
+
+export class CountryService implements ICountryService {
   repository: Repository<Country>;
 
-  constructor() {
-    this.repository = getRepository(Country);
+  constructor(repository: Repository<Country>) {
+    this.repository = repository;
   }
   /**
    * Get the country detail or throw execption
    * @param name Name of country
    */
-  public async get(name: string): Promise<ICountry | null> {
+  public async get(name: string): Promise<ICountry> {
     let countryDetail: Country;
     try {
       countryDetail = await this.repository.findOneOrFail({

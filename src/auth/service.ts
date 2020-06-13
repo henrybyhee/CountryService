@@ -1,21 +1,40 @@
-import { User } from "./entity";
+import { TokenExpiredError } from "jsonwebtoken";
 import { TokenService } from "./token.service";
-import { ITokenService, ITokens, IPayload } from "./token.interface";
+import { ITokenService, IToken, IPayload } from "./token.interface";
 import { IUserService, UserService } from "./user.service";
+import { IUser } from "./user.dto";
+import { getRepository } from "typeorm";
+import { UserToken, User } from "./entity";
+import { NotFoundError } from "../shared/errors";
 
-export class AuthService {
+/**
+ * Inject dependencies of Service class
+ */
+export function createService(): IAuthService {
+  const tokenRepository = getRepository(UserToken);
+  const userRepository = getRepository(User);
+  const tokenService = new TokenService(
+    process.env.JWT_ISSUER,
+    process.env.JWT_SECRET_FOR_ACCESS_TOKEN,
+    Number(process.env.JWT_EXPIRY_ACCESS_TOKEN_IN_SEC) || 300,
+    tokenRepository,
+  );
+  const userService = new UserService(userRepository);
+  return new AuthService(tokenService, userService);
+}
+
+export interface IAuthService {
+  signup(email: string, pwd: string): Promise<IToken>;
+  login(email: string, pwd: string): Promise<IToken>;
+  authenticate(accessToken: string): Promise<IToken>;
+}
+
+export class AuthService implements IAuthService {
   tokenService: ITokenService;
   userService: IUserService;
-
-  constructor() {
-    this.tokenService = new TokenService(
-      process.env.JWT_ISSUER,
-      process.env.JWT_SECRET_FOR_ACCESS_TOKEN,
-      process.env.JWT_SECRET_FOR_REFRESH_TOKEN,
-      Number(process.env.JWT_EXPIRY_ACCESS_TOKEN_IN_SEC) || 300,
-      Number(process.env.JWT_EXPIRY_REFRESH_TOKEN_IN_SEC) || 1209600,
-    );
-    this.userService = new UserService();
+  constructor(tokenService: ITokenService, userService: IUserService) {
+    this.tokenService = tokenService;
+    this.userService = userService;
   }
 
   /**
@@ -25,7 +44,7 @@ export class AuthService {
    * @throws {WrongInputError} Email is in use
    * @throws {Error} Uncaught Error
    */
-  public async signup(email: string, pwd: string): Promise<ITokens> {
+  public async signup(email: string, pwd: string): Promise<IToken> {
     try {
       await this.userService.signup(email, pwd);
     } catch (err) {
@@ -33,8 +52,8 @@ export class AuthService {
       throw err;
     }
     // Generate New Tokens
-    const tokens = await this.tokenService.generateTokens(email);
-    return tokens;
+    const token = await this.tokenService.generateAccessToken(email);
+    return token;
   }
 
   /**
@@ -45,45 +64,15 @@ export class AuthService {
    * @throws {NotFoundError} user is not found
    * @throws {Error} Uncaught Error
    */
-  public async login(email: string, pwd: string): Promise<ITokens> {
+  public async login(email: string, pwd: string): Promise<IToken> {
     try {
       await this.userService.login(email, pwd);
     } catch (err) {
       throw err;
     }
     // Generate tokens
-    const tokens = await this.tokenService.generateTokens(email);
-    return tokens;
-  }
-
-  /**
-   * Verify refresh token:
-   * - Token exists
-   * - Token is not revoked
-   * - Token is valid
-   * - Token use is correct
-   * - User exists
-   * 
-   * Then generate access token.
-   * @param refreshToken 
-   * @throws {NotFoundError} Token not found
-   * @throws {TokenVerifyError} Token is revoked or verification failed.
-   * @throws {Error} Uncaught Error
-   */
-  public async refresh(refreshToken: string): Promise<ITokens> {
-    let payload: IPayload;
-    let user: User;
-    try {
-      payload = await this.tokenService.verifyRefreshToken(refreshToken);
-      user = await this.userService.getUser(payload.user);
-    } catch (err) {
-      throw err;
-    }
-    const accessToken = await this.tokenService.generateAccessToken(user.email);
-    return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    };
+    const token = await this.tokenService.generateAccessToken(email);
+    return token;
   }
 
   /**
@@ -93,14 +82,37 @@ export class AuthService {
    * @throws {TokenVerifyError} Token is revoked or verification failed.
    * @throws {Error} Uncaught Error
    */
-  public async authenticate(accessToken: string): Promise<void> {
+  public async authenticate(accessToken: string): Promise<IToken> {
     let payload: IPayload;
-    let user: User;
+    let user: IUser;
     try {
       payload = await this.tokenService.verifyAccessToken(accessToken);
       user = await this.userService.getUser(payload.user);
     } catch (err) {
+      if (err instanceof TokenExpiredError) {
+        console.log("Token has expired, generating new token");
+        let newToken;
+        try {
+          newToken = await this.refresh(accessToken);
+        } catch (err) {
+          throw err;
+        }
+        return newToken;
+      }
       throw err;
     }
+    return accessToken;
+  }
+
+  async refresh(oldToken: string): Promise<IToken> {
+    const userId = await this.tokenService.getUserIdFromAccessToken(oldToken);
+    let user;
+    try {
+      user = await this.userService.getUser(userId);
+    } catch (err) {
+      throw new NotFoundError("User is not found.");
+    }
+    const token = await this.tokenService.generateAccessToken(userId);
+    return token;
   }
 }

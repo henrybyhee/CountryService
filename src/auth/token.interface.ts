@@ -5,15 +5,10 @@ export interface IPayload {
   exp: number;
 }
 
-export interface ITokens {
-  accessToken: string;
-  refreshToken: string;
-}
+export type IToken = string;
 
 export interface ITokenService {
-  generateTokens(userId: string): Promise<ITokens>;
-  generateAccessToken(userId: string): Promise<string>;
-  generateRefreshToken(userId: string): Promise<string>;
+  generateAccessToken(userId: string): Promise<IToken>;
   verifyAccessToken(token: string): Promise<IPayload>;
-  verifyRefreshToken(token: string): Promise<IPayload>;
+  getUserIdFromAccessToken(token: string): Promise<string>;
 }

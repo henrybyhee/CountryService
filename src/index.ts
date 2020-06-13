@@ -22,8 +22,6 @@ const dbConfig = {
   },
 };
 
-
-
 // Build ormconfig.js file if it is missing.
 if (!fs.existsSync("/app/ormconfig.json")) {
   console.log("Writing ormConfig.json file...");
@@ -36,10 +34,9 @@ if (!fs.existsSync("/app/ormconfig.json")) {
 }
 createConnection().then((connection) => {
   console.log("DB connection is alive!");
+  app.listen(3000, () => {
+    console.log("Country service is alive!");
+  });
 }).catch((err) => {
   console.log(err);
-});
-
-app.listen(3000, () => {
-  console.log("Country service is alive!");
 });
