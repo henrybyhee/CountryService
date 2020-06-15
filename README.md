@@ -97,8 +97,7 @@ POST /oauth/login/
 1. 201 Success
    ```json
     {
-        "accessToken": "",
-        "refreshToken": "",
+        "accessToken": ""
     }
    ```
 2. 422 Unprocessed Entity. Possible causes: incorrect user input, Wrong password
