@@ -80,7 +80,7 @@ POST /oauth/signup/
 
 ### 2. LOGIN
 
-POST /oauth/signup/
+POST /oauth/login/
 
 *Request Body*
 ```json
